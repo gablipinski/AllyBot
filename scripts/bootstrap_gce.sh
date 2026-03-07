@@ -1,119 +1,146 @@
-#!/usr/bin/env bash
-set -euo pipefail
+param(
+  [Parameter(Mandatory = $true)]
+  [string]$ProjectId,
 
-APP_DIR=""
-SERVICE_NAME="allybot"
-BOT_FILE="main_bot.py"
-RUN_USER=""
+  [Parameter(Mandatory = $true)]
+  [string]$Zone,
 
-while [[ $# -gt 0 ]]; do
-  case "$1" in
-    --app-dir)
-      APP_DIR="$2"
-      shift 2
-      ;;
-    --service)
-      SERVICE_NAME="$2"
-      shift 2
-      ;;
-    --python-file)
-      BOT_FILE="$2"
-      shift 2
-      ;;
-    --run-user)
-      RUN_USER="$2"
-      shift 2
-      ;;
-    *)
-      echo "Unknown arg: $1"
-      exit 1
-      ;;
-  esac
-done
+  [Parameter(Mandatory = $true)]
+  [string]$Instance,
 
-if [[ -z "$APP_DIR" ]]; then
-  echo "Missing --app-dir"
-  exit 1
-fi
+  [string]$RemoteDir = "~/allybot",
+  [string]$ServiceName = "allybot",
+  [string]$PythonFile = "main_bot.py",
+  [switch]$CreateInstanceIfMissing,
+  [string]$MachineType = "e2-micro",
+  [string]$ImageFamily = "debian-12",
+  [string]$ImageProject = "debian-cloud"
+)
 
-if [[ $EUID -ne 0 ]]; then
-  echo "Run this script as root (use sudo)."
-  exit 1
-fi
+$ErrorActionPreference = "Stop"
 
-if [[ -z "$RUN_USER" ]]; then
-  if [[ -n "${SUDO_USER:-}" ]]; then
-    RUN_USER="$SUDO_USER"
-  else
-    RUN_USER="$(id -un)"
-  fi
-fi
+function Resolve-GCloudCommand {
+  $cmd = Get-Command "gcloud" -ErrorAction SilentlyContinue
+  if ($cmd) {
+    return $cmd.Source
+  }
 
-USER_HOME="$(getent passwd "$RUN_USER" | cut -d: -f6)"
-if [[ -z "$USER_HOME" ]]; then
-  echo "Could not resolve home for user: $RUN_USER"
-  exit 1
-fi
+  $candidates = @(
+    "$env:LOCALAPPDATA\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd",
+    "$env:ProgramFiles\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd",
+    "C:\Program Files (x86)\Google\Cloud SDK\google-cloud-sdk\bin\gcloud.cmd"
+  )
 
-# Expand ~/... to an absolute path for the target run user.
-if [[ "${APP_DIR:0:2}" == "~/" ]]; then
-  APP_DIR="${USER_HOME}/${APP_DIR:2}"
-fi
+  foreach ($candidate in $candidates) {
+    if (Test-Path $candidate) {
+      return $candidate
+    }
+  }
 
-apt-get update
-apt-get install -y python3 python3-venv
+  throw "Required command not found: gcloud. Install Google Cloud SDK or add gcloud to PATH."
+}
 
-mkdir -p "$APP_DIR"
-chown -R "$RUN_USER":"$RUN_USER" "$APP_DIR"
+$GCloudCmd = Resolve-GCloudCommand
 
-if [[ ! -f "$APP_DIR/requirements_inatividade.txt" ]]; then
-  echo "requirements_inatividade.txt not found in $APP_DIR"
-  exit 1
-fi
+$root = Split-Path -Parent $PSScriptRoot
+$botFilePath = Join-Path $root $PythonFile
+$requirementsPath = Join-Path $root "requirements_inatividade.txt"
+$envPath = Join-Path $root ".env"
+$bootstrapPath = Join-Path $PSScriptRoot "bootstrap_gce.sh"
 
-if [[ ! -f "$APP_DIR/$BOT_FILE" ]]; then
-  echo "$BOT_FILE not found in $APP_DIR"
-  exit 1
-fi
+if (-not (Test-Path $botFilePath)) {
+  throw "Bot file not found: $botFilePath"
+}
+if (-not (Test-Path $requirementsPath)) {
+  throw "Requirements file not found: $requirementsPath"
+}
+if (-not (Test-Path $bootstrapPath)) {
+  throw "Bootstrap script not found: $bootstrapPath"
+}
 
-if [[ ! -d "$APP_DIR/.venv" ]]; then
-  sudo -u "$RUN_USER" python3 -m venv "$APP_DIR/.venv"
-fi
+Write-Host "Setting gcloud project to $ProjectId"
+& $GCloudCmd config set project $ProjectId | Out-Null
 
-sudo -u "$RUN_USER" "$APP_DIR/.venv/bin/pip" install --upgrade pip
-sudo -u "$RUN_USER" "$APP_DIR/.venv/bin/pip" install -r "$APP_DIR/requirements_inatividade.txt"
+$instanceExists = $true
+try {
+  & $GCloudCmd compute instances describe $Instance --zone $Zone | Out-Null
+} catch {
+  $instanceExists = $false
+}
 
-if [[ ! -f "$APP_DIR/.env" ]]; then
-  cat <<EOF
-WARNING: $APP_DIR/.env not found.
-Upload your real .env file and restart the service:
-sudo systemctl restart ${SERVICE_NAME}.service
-EOF
-fi
+if (-not $instanceExists) {
+  if ($CreateInstanceIfMissing) {
+    Write-Host "Creating instance $Instance in $Zone"
+    & $GCloudCmd compute instances create $Instance `
+      --zone $Zone `
+      --machine-type $MachineType `
+      --image-family $ImageFamily `
+      --image-project $ImageProject
+  } else {
+    throw "Instance '$Instance' not found in zone '$Zone'. Use -CreateInstanceIfMissing or create it manually."
+  }
+}
 
-cat >/etc/systemd/system/${SERVICE_NAME}.service <<EOF
-[Unit]
-Description=Discord AllyBot Service
-After=network.target
+$instanceStatus = (& $GCloudCmd compute instances describe $Instance --zone $Zone --format="value(status)").Trim()
+if ($instanceStatus -eq "TERMINATED") {
+  Write-Host "Instance is TERMINATED. Starting $Instance..."
+  & $GCloudCmd compute instances start $Instance --zone $Zone | Out-Null
+}
 
-[Service]
-Type=simple
-User=${RUN_USER}
-WorkingDirectory=${APP_DIR}
-ExecStart=${APP_DIR}/.venv/bin/python ${APP_DIR}/${BOT_FILE}
-Restart=always
-RestartSec=5
-Environment=PYTHONUNBUFFERED=1
+# Wait until the VM is RUNNING before SSH/SCP to avoid "resource is not ready" failures.
+$maxAttempts = 30
+for ($attempt = 1; $attempt -le $maxAttempts; $attempt++) {
+  $instanceStatus = (& $GCloudCmd compute instances describe $Instance --zone $Zone --format="value(status)").Trim()
+  if ($instanceStatus -eq "RUNNING") {
+    break
+  }
 
-[Install]
-WantedBy=multi-user.target
-EOF
+  Write-Host "Waiting for instance to be RUNNING (current: $instanceStatus, attempt $attempt/$maxAttempts)..."
+  Start-Sleep -Seconds 5
+}
 
-systemctl daemon-reload
-systemd-analyze verify "/etc/systemd/system/${SERVICE_NAME}.service"
-systemctl enable "${SERVICE_NAME}.service"
-systemctl restart "${SERVICE_NAME}.service"
+if ($instanceStatus -ne "RUNNING") {
+  throw "Instance '$Instance' is not ready (status: $instanceStatus). Try again after it finishes starting."
+}
 
-echo "Deployment finished."
-echo "Check service status: sudo systemctl status ${SERVICE_NAME}.service"
-echo "Check logs: sudo journalctl -u ${SERVICE_NAME}.service -f"
+# Resolve remote home and convert ~/ paths to absolute paths for consistent SSH/SCP behavior.
+# Use single-quoted command strings so PowerShell does not expand $HOME locally.
+$remoteHome = (& $GCloudCmd compute ssh $Instance --zone $Zone --command 'printf %s "$HOME"').Trim()
+if ([string]::IsNullOrWhiteSpace($remoteHome) -or -not $remoteHome.StartsWith('/')) {
+  $remoteHome = (& $GCloudCmd compute ssh $Instance --zone $Zone --command 'getent passwd "$(id -un)" | cut -d: -f6').Trim()
+}
+if ([string]::IsNullOrWhiteSpace($remoteHome) -or -not $remoteHome.StartsWith('/')) {
+  throw "Could not resolve a valid remote HOME directory for instance '$Instance'. Got: '$remoteHome'"
+}
+
+$effectiveRemoteDir = $RemoteDir
+if ($RemoteDir.StartsWith("~/")) {
+  $effectiveRemoteDir = "$remoteHome/$($RemoteDir.Substring(2))"
+}
+
+Write-Host "Preparing remote directory $effectiveRemoteDir"
+& $GCloudCmd compute ssh $Instance --zone $Zone --command "mkdir -p '$effectiveRemoteDir'"
+
+$uploadFiles = @($botFilePath, $requirementsPath)
+if (Test-Path $envPath) {
+  $uploadFiles += $envPath
+} else {
+  Write-Warning ".env not found at $envPath. Service will start but fail until .env is uploaded."
+}
+
+Write-Host "Uploading bot files"
+foreach ($file in $uploadFiles) {
+  Write-Host "  -> Uploading $(Split-Path -Leaf $file)"
+  & $GCloudCmd compute scp --zone $Zone $file "$($Instance):$effectiveRemoteDir"
+}
+
+Write-Host "Uploading bootstrap script"
+& $GCloudCmd compute scp --zone $Zone $bootstrapPath "$($Instance):/tmp/bootstrap_gce.sh"
+
+$remoteCmd = "sed -i 's/\r$//' /tmp/bootstrap_gce.sh; chmod +x /tmp/bootstrap_gce.sh; sudo /tmp/bootstrap_gce.sh --app-dir '$effectiveRemoteDir' --service '$ServiceName' --python-file '$PythonFile'"
+Write-Host "Running remote bootstrap"
+& $GCloudCmd compute ssh $Instance --zone $Zone --command $remoteCmd
+
+Write-Host "Done. Useful commands:"
+Write-Host "  gcloud compute ssh $Instance --zone $Zone --command 'sudo systemctl status $ServiceName'"
+Write-Host "  gcloud compute ssh $Instance --zone $Zone --command 'sudo journalctl -u $ServiceName -f'"
