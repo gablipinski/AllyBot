@@ -9,7 +9,7 @@ $Instance = "1750903512185116790"
 
 $RemoteDir = "~/allybot"
 $ServiceName = "allybot"
-$PythonFile = "lena_fiscal_bot_inatividade.py"
+$PythonFile = "main_bot.py"
 
 # Set to $true if you want to auto-create the VM when it does not exist.
 $CreateInstanceIfMissing = $false

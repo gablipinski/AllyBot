@@ -3,7 +3,7 @@ set -euo pipefail
 
 APP_DIR=""
 SERVICE_NAME="allybot"
-BOT_FILE="lena_fiscal_bot_inatividade.py"
+BOT_FILE="main_bot.py"
 RUN_USER=""
 
 while [[ $# -gt 0 ]]; do
