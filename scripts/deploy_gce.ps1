@@ -58,6 +58,12 @@ if (-not (Test-Path $bootstrapPath)) {
   throw "Bootstrap script not found: $bootstrapPath"
 }
 
+$bootstrapFirstLine = (Get-Content -Path $bootstrapPath -TotalCount 1).Trim()
+# Accept common shebang variants like '#!/usr/bin/env bash' and '#!/bin/bash'.
+if ($bootstrapFirstLine -notmatch '^#!\s*/usr/bin/env\s+bash\b' -and $bootstrapFirstLine -notmatch '^#!\s*/bin/bash\b') {
+  throw "Bootstrap script does not look like a bash script: $bootstrapPath"
+}
+
 Write-Host "Setting gcloud project to $ProjectId"
 & $GCloudCmd config set project $ProjectId | Out-Null
 
@@ -137,7 +143,7 @@ foreach ($file in $uploadFiles) {
 Write-Host "Uploading bootstrap script"
 & $GCloudCmd compute scp --zone $Zone $bootstrapPath "$($Instance):/tmp/bootstrap_gce.sh"
 
-$remoteCmd = "chmod +x /tmp/bootstrap_gce.sh; sudo /tmp/bootstrap_gce.sh --app-dir '$effectiveRemoteDir' --service '$ServiceName' --python-file '$PythonFile'"
+$remoteCmd = "sed -i 's/\r$//' /tmp/bootstrap_gce.sh; chmod +x /tmp/bootstrap_gce.sh; sudo /tmp/bootstrap_gce.sh --app-dir '$effectiveRemoteDir' --service '$ServiceName' --python-file '$PythonFile'"
 Write-Host "Running remote bootstrap"
 & $GCloudCmd compute ssh $Instance --zone $Zone --command $remoteCmd
 

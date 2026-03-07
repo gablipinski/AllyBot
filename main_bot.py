@@ -2,7 +2,7 @@ import os
 import json
 import asyncio
 import traceback
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timezone
 
 import discord
 from discord.ext import tasks, commands
@@ -21,6 +21,7 @@ def _req_int(name: str) -> int:
         raise RuntimeError(f"Variável obrigatória ausente no .env: {name}")
     return int(v)
 
+
 TOKEN = os.getenv("DISCORD_TOKEN")
 if not TOKEN:
     raise RuntimeError("Variável obrigatória ausente no .env: DISCORD_TOKEN")
@@ -38,32 +39,48 @@ ID_CANAL_VOZ_OCULTO = int(os.getenv("HIDDEN_VOICE_CHANNEL_ID", "0"))
 ID_CARGO_ACESSO_OCULTO = int(os.getenv("HIDDEN_ACCESS_ROLE_ID", "0"))
 
 DIAS_PARA_INATIVO = int(os.getenv("DIAS_PARA_INATIVO", "7"))
-DIAS_PARA_REVISAO = int(os.getenv("DIAS_PARA_REVISAO", "30"))  # relatório p/ kick manual
+DIAS_PARA_REVISAO = int(
+    os.getenv("DIAS_PARA_REVISAO", "30")
+)  # relatório p/ kick manual
 DB_PATH = os.getenv("DB_PATH", "dados.db")
 LEGACY_JSON_PATH = os.getenv("LEGACY_JSON_PATH", "dados.json")
 PAGE_SIZE = int(os.getenv("PAGE_SIZE", "20"))
 
 # Remover (patentes)
 CARGOS_PARA_REMOVER = [
-    1184578793243947160, 1118006053083283557, 1376724256548720720,
-    1398728831086497926, 1398730283116789830, 1398728890138099734,
-    1437511276535349350, 1398731072199589978, 1398734538863149096,
-    930609047584010241, 1091176128842043523, 1091176240624451686,
-    930608651545239582, 930608929359142972, 1428394625869283492
+    1184578793243947160,
+    1118006053083283557,
+    1376724256548720720,
+    1398728831086497926,
+    1398730283116789830,
+    1398728890138099734,
+    1437511276535349350,
+    1398731072199589978,
+    1398734538863149096,
+    930609047584010241,
+    1091176128842043523,
+    1091176240624451686,
+    930608651545239582,
+    930608929359142972,
+    1428394625869283492,
 ]
 
 # Imunes (não rebaixa automaticamente)
 CARGOS_IMUNES = [
-    969636554643501096, 1398720861204385792, 930609161740361821,
-    1398723533013520475, 1424884260082417776
+    969636554643501096,
+    1398720861204385792,
+    930609161740361821,
+    1398723533013520475,
+    1424884260082417776,
 ]
 
 # Autorizados a comandos (além de Admin)
 CARGOS_AUTORIZADOS_COMANDOS = {
     1398720861204385792,  # Líder de Aliança
-    930609161740361821,   # Líder de Guild
+    930609161740361821,  # Líder de Guild
     1398723533013520475,  # Organizador Geral
 }
+
 
 def has_admin_or_allowed_role():
     async def predicate(ctx: commands.Context):
@@ -72,13 +89,20 @@ def has_admin_or_allowed_role():
         if ctx.author.guild_permissions.administrator:
             return True
         return any(r.id in CARGOS_AUTORIZADOS_COMANDOS for r in ctx.author.roles)
+
     return commands.check(predicate)
+
 
 def _perm_msg():
     return "Sem permissão. Apenas Administrador, Líder de Aliança, Líder de Guild ou Organizador Geral podem usar este comando."
 
+
 def hidden_guard_enabled() -> bool:
-    return all(x > 0 for x in (ID_CANAL_VOZ_GATILHO, ID_CANAL_VOZ_OCULTO, ID_CARGO_ACESSO_OCULTO))
+    return all(
+        x > 0
+        for x in (ID_CANAL_VOZ_GATILHO, ID_CANAL_VOZ_OCULTO, ID_CARGO_ACESSO_OCULTO)
+    )
+
 
 #######################################################################################################################################################################################################
 # INTENTS / BOT
@@ -89,16 +113,19 @@ intents.members = True
 intents.voice_states = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
+
 #######################################################################################################################################################################################################
 # UTIL
 #######################################################################################################################################################################################################
 def utcnow() -> datetime:
     return datetime.now(timezone.utc)
 
+
 def iso(dt: datetime) -> str:
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
     return dt.isoformat()
+
 
 def parse_iso(s: str) -> datetime:
     d = datetime.fromisoformat(s)
@@ -106,18 +133,24 @@ def parse_iso(s: str) -> datetime:
         d = d.replace(tzinfo=timezone.utc)
     return d
 
-async def enviar_log(titulo: str, descricao: str, cor: discord.Color, thumbnail: str | None = None):
+
+async def enviar_log(
+    titulo: str, descricao: str, cor: discord.Color, thumbnail: str | None = None
+):
     try:
         canal = bot.get_channel(ID_CANAL_LOGS)
         if canal:
             embed = discord.Embed(title=titulo, description=descricao, color=cor)
-            embed.set_footer(text=f"Lena Fiscal • {datetime.now().strftime('%d/%m %H:%M')}")
+            embed.set_footer(
+                text=f"Lena Fiscal • {datetime.now().strftime('%d/%m %H:%M')}"
+            )
             if thumbnail:
                 embed.set_thumbnail(url=thumbnail)
             await canal.send(embed=embed)
         print(f"[LOG] {titulo}: {descricao}")
     except Exception as e:
         print(f"[ERRO] Falha ao enviar_log: {e}")
+
 
 async def log_exception(contexto: str, e: Exception, extra: str | None = None):
     tb = "".join(traceback.format_exception(type(e), e, e.__traceback__))[-1200:]
@@ -126,6 +159,7 @@ async def log_exception(contexto: str, e: Exception, extra: str | None = None):
         desc += f"\nExtra: {extra}"
     desc += f"\n```{tb}```"
     await enviar_log("Erro", desc, discord.Color.red())
+
 
 async def ensure_hidden_voice_defaults(guild: discord.Guild):
     """Garante que o canal oculto fique invisível/inacessível por padrão para @everyone."""
@@ -148,7 +182,10 @@ async def ensure_hidden_voice_defaults(guild: discord.Guild):
         changed = True
 
     if changed:
-        await hidden.set_permissions(everyone, overwrite=overwrite, reason="Anti-spy: esconder canal por padrão.")
+        await hidden.set_permissions(
+            everyone, overwrite=overwrite, reason="Anti-spy: esconder canal por padrão."
+        )
+
 
 async def aplicar_guardiao_canal_oculto(member: discord.Member, before, after):
     """Move para o canal oculto apenas quem entra no gatilho e tem o cargo de acesso."""
@@ -158,15 +195,25 @@ async def aplicar_guardiao_canal_oculto(member: discord.Member, before, after):
     guild = member.guild
     trigger = guild.get_channel(ID_CANAL_VOZ_GATILHO)
     hidden = guild.get_channel(ID_CANAL_VOZ_OCULTO)
-    if not isinstance(trigger, discord.VoiceChannel) or not isinstance(hidden, discord.VoiceChannel):
+    if not isinstance(trigger, discord.VoiceChannel) or not isinstance(
+        hidden, discord.VoiceChannel
+    ):
         return
 
     # Reforça as permissões padrão de ocultação.
     await ensure_hidden_voice_defaults(guild)
 
     # Se saiu do oculto, remove o acesso individual para não deixar rastros.
-    if before.channel and before.channel.id == hidden.id and (after.channel is None or after.channel.id != hidden.id):
-        await hidden.set_permissions(member, overwrite=None, reason="Anti-spy: remove acesso ao sair do canal oculto.")
+    if (
+        before.channel
+        and before.channel.id == hidden.id
+        and (after.channel is None or after.channel.id != hidden.id)
+    ):
+        await hidden.set_permissions(
+            member,
+            overwrite=None,
+            reason="Anti-spy: remove acesso ao sair do canal oculto.",
+        )
 
     # Só move quando o usuário entra no canal de gatilho.
     if not after.channel or after.channel.id != trigger.id:
@@ -180,8 +227,15 @@ async def aplicar_guardiao_canal_oculto(member: discord.Member, before, after):
     user_overwrite.view_channel = True
     user_overwrite.connect = True
     user_overwrite.speak = True
-    await hidden.set_permissions(member, overwrite=user_overwrite, reason="Anti-spy: acesso temporário ao canal oculto.")
-    await member.move_to(hidden, reason="Anti-spy: entrou no canal de gatilho com cargo autorizado.")
+    await hidden.set_permissions(
+        member,
+        overwrite=user_overwrite,
+        reason="Anti-spy: acesso temporário ao canal oculto.",
+    )
+    await member.move_to(
+        hidden, reason="Anti-spy: entrou no canal de gatilho com cargo autorizado."
+    )
+
 
 @bot.event
 async def on_command_error(ctx, error):
@@ -189,6 +243,7 @@ async def on_command_error(ctx, error):
     if isinstance(error, commands.CommandNotFound):
         return
     raise error
+
 
 #######################################################################################################################################################################################################
 # DB (SQLite)
@@ -204,6 +259,7 @@ CREATE TABLE IF NOT EXISTS users (
 );
 """
 
+
 async def ensure_db():
     global _db_initialized
     if _db_initialized:
@@ -216,13 +272,18 @@ async def ensure_db():
             await db.commit()
         _db_initialized = True
 
+
 async def db_get(user_id: int) -> tuple[str | None, str | None]:
     await ensure_db()
     async with _db_lock:
         async with aiosqlite.connect(DB_PATH) as db:
-            async with db.execute("SELECT last_seen, inactive_since FROM users WHERE user_id = ?", (user_id,)) as cur:
+            async with db.execute(
+                "SELECT last_seen, inactive_since FROM users WHERE user_id = ?",
+                (user_id,),
+            ) as cur:
                 row = await cur.fetchone()
                 return (row[0], row[1]) if row else (None, None)
+
 
 async def db_upsert_last_seen(user_id: int, last_seen_iso: str):
     await ensure_db()
@@ -235,6 +296,7 @@ async def db_upsert_last_seen(user_id: int, last_seen_iso: str):
             )
             await db.commit()
 
+
 async def db_set_inactive_since(user_id: int, inactive_since_iso: str):
     await ensure_db()
     async with _db_lock:
@@ -245,6 +307,7 @@ async def db_set_inactive_since(user_id: int, inactive_since_iso: str):
                 (user_id, inactive_since_iso),
             )
             await db.commit()
+
 
 async def db_clear_inactive_since(user_id: int):
     await ensure_db()
@@ -257,6 +320,7 @@ async def db_clear_inactive_since(user_id: int):
             )
             await db.commit()
 
+
 async def db_clear_inactive_if_activity_newer(user_id: int):
     last_seen_str, inactive_since_str = await db_get(user_id)
     if not last_seen_str or not inactive_since_str:
@@ -266,6 +330,7 @@ async def db_clear_inactive_if_activity_newer(user_id: int):
             await db_clear_inactive_since(user_id)
     except Exception:
         await db_clear_inactive_since(user_id)
+
 
 async def migrate_legacy_json_if_exists():
     await ensure_db()
@@ -302,9 +367,14 @@ async def migrate_legacy_json_if_exists():
                         (uid, payload.get("last_seen"), payload.get("inactive_since")),
                     )
                 await db.commit()
-        await enviar_log("Migração concluída", f"Migrado {LEGACY_JSON_PATH} -> {DB_PATH}.", discord.Color.green())
+        await enviar_log(
+            "Migração concluída",
+            f"Migrado {LEGACY_JSON_PATH} -> {DB_PATH}.",
+            discord.Color.green(),
+        )
     except Exception as e:
         await log_exception("migração: gravação no DB", e)
+
 
 #######################################################################################################################################################################################################
 # EVENTOS (atividade)
@@ -328,6 +398,7 @@ async def on_ready():
         discord.Color.blue(),
     )
 
+
 @bot.event
 async def on_message(message: discord.Message):
     if message.author.bot:
@@ -342,7 +413,10 @@ async def on_message(message: discord.Message):
         if role and role in getattr(message.author, "roles", []):
             await db_clear_inactive_since(uid)
     except Exception as e:
-        await log_exception("on_message: atualizar last_seen", e, extra=f"author_id={message.author.id}")
+        await log_exception(
+            "on_message: atualizar last_seen", e, extra=f"author_id={message.author.id}"
+        )
+
 
 @bot.event
 async def on_voice_state_update(member: discord.Member, before, after):
@@ -358,7 +432,12 @@ async def on_voice_state_update(member: discord.Member, before, after):
 
         await aplicar_guardiao_canal_oculto(member, before, after)
     except Exception as e:
-        await log_exception("on_voice_state_update: atividade/guardiao_voz", e, extra=f"member_id={member.id}")
+        await log_exception(
+            "on_voice_state_update: atividade/guardiao_voz",
+            e,
+            extra=f"member_id={member.id}",
+        )
+
 
 #######################################################################################################################################################################################################
 # LÓGICA: varredura
@@ -392,31 +471,47 @@ async def executar_verificacao_inatividade(guild: discord.Guild) -> dict:
                 continue
             dias_no_limbo = (agora - parse_iso(inactive_since_str)).days
             if dias_no_limbo >= DIAS_PARA_REVISAO:
-                candidatos_kick.append((dias_no_limbo, member.mention, inactive_since_str[:10]))
+                candidatos_kick.append(
+                    (dias_no_limbo, member.mention, inactive_since_str[:10])
+                )
             continue
 
         # Ativo -> virar Inativo
         if dias_sem_interagir >= DIAS_PARA_INATIVO:
             try:
-                await member.add_roles(role_inativo, reason="Marcado como inativo automaticamente.")
+                await member.add_roles(
+                    role_inativo, reason="Marcado como inativo automaticamente."
+                )
                 for cargo_id in CARGOS_PARA_REMOVER:
                     cargo = guild.get_role(cargo_id)
                     if cargo and cargo in member.roles:
-                        await member.remove_roles(cargo, reason="Rebaixamento por inatividade.")
+                        await member.remove_roles(
+                            cargo, reason="Rebaixamento por inatividade."
+                        )
                 await db_set_inactive_since(member.id, iso(agora))
                 contagem_inativos += 1
             except Exception as e:
-                await log_exception("marcar como inativo", e, extra=f"member_id={member.id}")
+                await log_exception(
+                    "marcar como inativo", e, extra=f"member_id={member.id}"
+                )
 
     try:
         if candidatos_kick:
             candidatos_kick.sort(reverse=True)
             for i in range(0, len(candidatos_kick), PAGE_SIZE):
-                chunk = candidatos_kick[i:i + PAGE_SIZE]
-                texto = "\n".join([f"{m} — {d} dias (desde {dt})" for d, m, dt in chunk])
-                await enviar_log("Lista para kick manual", texto, discord.Color.orange())
+                chunk = candidatos_kick[i : i + PAGE_SIZE]
+                texto = "\n".join(
+                    [f"{m} — {d} dias (desde {dt})" for d, m, dt in chunk]
+                )
+                await enviar_log(
+                    "Lista para kick manual", texto, discord.Color.orange()
+                )
         else:
-            await enviar_log("Lista para kick manual", "Nenhum membro elegível hoje.", discord.Color.green())
+            await enviar_log(
+                "Lista para kick manual",
+                "Nenhum membro elegível hoje.",
+                discord.Color.green(),
+            )
     except Exception as e:
         await log_exception("relatório kick manual", e)
 
@@ -426,7 +521,12 @@ async def executar_verificacao_inatividade(guild: discord.Guild) -> dict:
         discord.Color.blue(),
     )
 
-    return {"ok": True, "novos_inativos": contagem_inativos, "elegiveis": len(candidatos_kick)}
+    return {
+        "ok": True,
+        "novos_inativos": contagem_inativos,
+        "elegiveis": len(candidatos_kick),
+    }
+
 
 @tasks.loop(hours=24)
 async def verificar_inatividade():
@@ -435,10 +535,12 @@ async def verificar_inatividade():
         return
     await executar_verificacao_inatividade(guild)
 
+
 @verificar_inatividade.before_loop
 async def before_verificar_inatividade():
     await bot.wait_until_ready()
     await asyncio.sleep(30)
+
 
 #######################################################################################################################################################################################################
 # COMANDOS
@@ -446,6 +548,7 @@ async def before_verificar_inatividade():
 @bot.command(name="version")
 async def version_cmd(ctx):
     await ctx.send(f"Version: {VERSION}")
+
 
 @bot.command()
 @has_admin_or_allowed_role()
@@ -473,7 +576,9 @@ async def radar(ctx):
 
         risco.sort(key=lambda x: x[0], reverse=True)
         if not risco:
-            await ctx.send(f"Ninguém na zona de risco (4 a {DIAS_PARA_INATIVO-1} dias).")
+            await ctx.send(
+                f"Ninguém na zona de risco (4 a {DIAS_PARA_INATIVO - 1} dias)."
+            )
             return
 
         linhas = "\n".join([f"{d} dias: {m}" for d, m in risco[:20]])
@@ -482,10 +587,12 @@ async def radar(ctx):
         await log_exception("comando radar", e)
         await ctx.send("Erro ao executar radar (veja o canal de logs).")
 
+
 @radar.error
 async def radar_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         await ctx.send(_perm_msg())
+
 
 @bot.command()
 @has_admin_or_allowed_role()
@@ -512,7 +619,9 @@ async def kicklist(ctx, dias: int = DIAS_PARA_REVISAO):
 
             dias_no_limbo = (agora - parse_iso(inactive_since_str)).days
             if dias_no_limbo >= dias:
-                candidatos.append((dias_no_limbo, member.mention, inactive_since_str[:10]))
+                candidatos.append(
+                    (dias_no_limbo, member.mention, inactive_since_str[:10])
+                )
 
         candidatos.sort(reverse=True)
         if not candidatos:
@@ -520,17 +629,19 @@ async def kicklist(ctx, dias: int = DIAS_PARA_REVISAO):
             return
 
         for i in range(0, len(candidatos), PAGE_SIZE):
-            chunk = candidatos[i:i + PAGE_SIZE]
+            chunk = candidatos[i : i + PAGE_SIZE]
             texto = "\n".join([f"{m} — {d} dias (desde {dt})" for d, m, dt in chunk])
             await ctx.send(texto)
     except Exception as e:
         await log_exception("comando kicklist", e)
         await ctx.send("Erro ao gerar kicklist (veja o canal de logs).")
 
+
 @kicklist.error
 async def kicklist_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         await ctx.send(_perm_msg())
+
 
 @bot.command()
 @has_admin_or_allowed_role()
@@ -542,15 +653,19 @@ async def runcheck(ctx):
         if not resumo.get("ok"):
             await ctx.send(f"Falha: {resumo.get('erro', 'erro desconhecido')}")
             return
-        await ctx.send(f"Check concluído. Novos inativos: {resumo['novos_inativos']} | Elegíveis: {resumo['elegiveis']}")
+        await ctx.send(
+            f"Check concluído. Novos inativos: {resumo['novos_inativos']} | Elegíveis: {resumo['elegiveis']}"
+        )
     except Exception as e:
         await log_exception("comando runcheck", e)
         await ctx.send("Erro ao rodar runcheck (veja o canal de logs).")
+
 
 @runcheck.error
 async def runcheck_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         await ctx.send(_perm_msg())
+
 
 @bot.command()
 @has_admin_or_allowed_role()
@@ -563,8 +678,12 @@ async def diag(ctx):
 
         total = len(guild.members)
         bots_count = sum(1 for m in guild.members if m.bot)
-        imunes_count = sum(1 for m in guild.members if any(r.id in CARGOS_IMUNES for r in m.roles))
-        com_cargo_inativo = sum(1 for m in guild.members if (not m.bot) and (role_inativo in m.roles))
+        imunes_count = sum(
+            1 for m in guild.members if any(r.id in CARGOS_IMUNES for r in m.roles)
+        )
+        com_cargo_inativo = sum(
+            1 for m in guild.members if (not m.bot) and (role_inativo in m.roles)
+        )
 
         sem_registro = 0
         sem_registro_nao_inativos = 0
@@ -609,10 +728,12 @@ async def diag(ctx):
         await log_exception("comando diag", e)
         await ctx.send("Erro ao executar diag (veja o canal de logs).")
 
+
 @diag.error
 async def diag_error(ctx, error):
     if isinstance(error, commands.CheckFailure):
         await ctx.send(_perm_msg())
+
 
 #######################################################################################################################################################################################################
 # START
