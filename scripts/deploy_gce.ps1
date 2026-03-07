@@ -10,7 +10,7 @@ param(
 
   [string]$RemoteDir = "~/allybot",
   [string]$ServiceName = "allybot",
-  [string]$PythonFile = "lena_fiscal_bot_inatividade.py",
+  [string]$PythonFile = "main_bot.py",
   [switch]$CreateInstanceIfMissing,
   [string]$MachineType = "e2-micro",
   [string]$ImageFamily = "debian-12",
