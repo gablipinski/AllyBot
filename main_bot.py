@@ -29,6 +29,9 @@ ID_GUILD = _req_int("GUILD_ID")
 ID_CARGO_INATIVO = _req_int("INATIVO_ROLE_ID")
 ID_CANAL_LOGS = _req_int("LOG_CHANNEL_ID")
 
+# Version
+VERSION = "0.0.2"
+
 # Anti-spy (canal de voz oculto)
 ID_CANAL_VOZ_GATILHO = int(os.getenv("TRIGGER_VOICE_CHANNEL_ID", "0"))
 ID_CANAL_VOZ_OCULTO = int(os.getenv("HIDDEN_VOICE_CHANNEL_ID", "0"))
@@ -440,9 +443,9 @@ async def before_verificar_inatividade():
 #######################################################################################################################################################################################################
 # COMANDOS
 #######################################################################################################################################################################################################
-@bot.command(name="test")
-async def test_cmd(ctx):
-    await ctx.send("TEST DONE")
+@bot.command(name="version")
+async def version_cmd(ctx):
+    await ctx.send(f"Version: {VERSION}")
 
 @bot.command()
 @has_admin_or_allowed_role()
