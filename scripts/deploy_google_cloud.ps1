@@ -12,7 +12,7 @@ $ServiceName = "allybot"
 $PythonFile = "main_bot.py"
 
 # Set to $true if you want to auto-create the VM when it does not exist.
-$CreateInstanceIfMissing = $false
+$CreateInstanceIfMissing = $true
 $MachineType = "e2-micro"
 $ImageFamily = "debian-12"
 $ImageProject = "debian-cloud"
