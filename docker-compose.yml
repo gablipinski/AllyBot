@@ -1,0 +1,12 @@
+services:
+  allybot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: allybot
+    restart: unless-stopped
+    environment:
+      TESSERACT_CMD: /usr/bin/tesseract
+    volumes:
+      - ./.env:/app/.env
+    command: ["python", "main_bot.py"]

@@ -40,7 +40,7 @@ function Test-DependenciesInstalled {
   $outFile = [System.IO.Path]::GetTempFileName()
   $errFile = [System.IO.Path]::GetTempFileName()
 
-  $probe = Start-Process -FilePath $PythonExe -ArgumentList @("-c", "import discord, dotenv, aiosqlite") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
+  $probe = Start-Process -FilePath $PythonExe -ArgumentList @("-c", "import discord, dotenv, PIL, pytesseract") -NoNewWindow -Wait -PassThru -RedirectStandardOutput $outFile -RedirectStandardError $errFile
   $ok = ($probe.ExitCode -eq 0)
 
   Remove-Item $outFile, $errFile -ErrorAction SilentlyContinue

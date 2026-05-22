@@ -5,8 +5,9 @@ from dataclasses import dataclass
 from dotenv import load_dotenv
 
 
-load_dotenv(override=True)
+load_dotenv(override=False)
 
+BOT_VERSION = "0.0.4"
 
 def _env_bool(name: str, default: bool = False) -> bool:
     value = os.getenv(name)
@@ -38,7 +39,6 @@ def _req_int_list(name: str) -> list[int]:
 class AppConfig:
     token: str
     guild_id: int
-    inativo_role_id: int
 
     default_log_channel_id: int
     bot_log_channel_id: int
@@ -56,16 +56,14 @@ class AppConfig:
     trigger_voice_channel_id: int
     hidden_voice_channel_id: int
     hidden_access_role_id: int
-
-    dias_para_inativo: int
-    dias_para_revisao: int
-    db_path: str
-    legacy_json_path: str
-    page_size: int
-
-    remove_role_ids: list[int]
-    immune_role_ids: set[int]
     allowed_command_role_ids: set[int]
+
+    hunt_event_enabled: bool
+    hunt_event_channel_id: int
+    hunt_event_log_channel_id: int
+    hunt_event_start_date: str
+    hunt_event_end_date: str
+    tesseract_cmd: str
 
     @property
     def hidden_guard_enabled(self) -> bool:
@@ -87,7 +85,6 @@ def load_config() -> AppConfig:
     return AppConfig(
         token=token,
         guild_id=_req_int("GUILD_ID"),
-        inativo_role_id=_req_int("INATIVO_ROLE_ID"),
         default_log_channel_id=_req_int("LOG_CHANNEL_ID"),
         bot_log_channel_id=int(os.getenv("BOT_LOG_CHANNEL_ID", "0")),
         command_log_channel_id=int(os.getenv("COMMAND_LOG_CHANNEL_ID", "0")),
@@ -95,21 +92,20 @@ def load_config() -> AppConfig:
         trigger_log_channel_id=int(os.getenv("TRIGGER_LOG_CHANNEL_ID", "0")),
         report_log_channel_id=int(os.getenv("REPORT_LOG_CHANNEL_ID", "0")),
         migration_log_channel_id=int(os.getenv("MIGRATION_LOG_CHANNEL_ID", "0")),
-        version=os.getenv("BOT_VERSION", "0.0.2"),
+        version=BOT_VERSION,
         command_prefix=os.getenv("COMMAND_PREFIX", "!"),
         enable_message_content_intent=_env_bool("ENABLE_MESSAGE_CONTENT_INTENT", True),
         enable_members_intent=_env_bool("ENABLE_MEMBERS_INTENT", True),
         trigger_voice_channel_id=int(os.getenv("TRIGGER_VOICE_CHANNEL_ID", "0")),
         hidden_voice_channel_id=int(os.getenv("HIDDEN_VOICE_CHANNEL_ID", "0")),
         hidden_access_role_id=int(os.getenv("HIDDEN_ACCESS_ROLE_ID", "0")),
-        dias_para_inativo=int(os.getenv("DIAS_PARA_INATIVO", "7")),
-        dias_para_revisao=int(os.getenv("DIAS_PARA_REVISAO", "30")),
-        db_path=os.getenv("DB_PATH", "dados.db"),
-        legacy_json_path=os.getenv("LEGACY_JSON_PATH", "dados.json"),
-        page_size=int(os.getenv("PAGE_SIZE", "20")),
-        remove_role_ids=_req_int_list("REMOVE_ROLE_IDS"),
-        immune_role_ids=set(_req_int_list("IMMUNE_ROLE_IDS")),
         allowed_command_role_ids=set(_req_int_list("ALLOWED_COMMAND_ROLE_IDS")),
+        hunt_event_enabled=_env_bool("HUNT_EVENT_ENABLED", False),
+        hunt_event_channel_id=int(os.getenv("HUNT_EVENT_CHANNEL_ID", "0")),
+        hunt_event_log_channel_id=int(os.getenv("HUNT_EVENT_LOG_CHANNEL_ID", "0")),
+        hunt_event_start_date=os.getenv("HUNT_EVENT_START_DATE", ""),
+        hunt_event_end_date=os.getenv("HUNT_EVENT_END_DATE", ""),
+        tesseract_cmd=os.getenv("TESSERACT_CMD", ""),
     )
 
 
